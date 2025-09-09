@@ -1,2 +1,2 @@
-ticker,date,open,high,low,close,volume
-MSFT,2025-08-29,508.66,509.6,504.4915,506.69,20961569
+ticker,trade_date,open,high,low,close,volume
+MSFT,2025-09-04,504.3,508.15,503.15,507.97,15509486
