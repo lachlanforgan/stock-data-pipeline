@@ -59,17 +59,18 @@ def DailyStockFetcher(myTimer: func.TimerRequest) -> None:
             "volume": int(latest_data["5. volume"])
         }
 
-        # 2. Connect to Azure SQL Database and insert data
+        # Build connection string
         conn_str = (
-            "Driver={ODBC Driver 18 for SQL Server};"
-            "Server=tcp:server9697.database.windows.net,1433;"
-            "Database=StocksVisualizerDB;"
-            "Uid=lachlanf;"
-            "Pwd=Chelmsford2323!!;"
+            f"Driver={{ODBC Driver 18 for SQL Server}};"
+            f"Server={server};"
+            f"Database={data};"
+            f"Uid={username};"
+            f"Pwd={password};"
             "Encrypt=yes;"
             "TrustServerCertificate=no;"
             "Connection Timeout=30;"
         )
+
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
 
