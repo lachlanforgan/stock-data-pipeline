@@ -1,0 +1,179 @@
+Update Todos
+  ⎿  ☒ Research Alpha Vantage metadata endpoints for dynamic stock
+       selection
+     ☒ Analyze current data pipeline architecture
+     ☐ Create implementation outline for dynamic stock selection
+     ☐ Design frontend API for requesting specific stocks
+     ☐ Implement market movers stock selection logic
+
+⏺ Implementation Outline
+
+  Step 1: Add Market Movers Function
+
+  Location: TimerFunction/__init__.py (around line 41)
+
+  def get_market_movers(category="top_gainers", count=5):
+      """Fetch market movers from Alpha Vantage"""
+      params = {
+          "function": "TOP_GAINERS_LOSERS",
+          "apikey": API_KEY
+      }
+      # Make API call, parse JSON, return ticker list
+      # Handle: timeouts, rate limits, API errors
+
+  Step 2: Create Stock Selection Logic
+
+  Location: New function after get_market_movers()
+
+  def select_stocks_for_processing():
+      """Determine which stocks to process today"""
+      mode = os.environ.get("SELECTION_MODE", "hybrid")
+
+      if mode == "static":
+          return ["MSFT", "AAPL", "GOOGL"]
+      elif mode == "dynamic":
+          return get_market_movers("top_gainers", 10)
+      else:  # hybrid
+          # Combine watchlist + market movers
+          # Deduplicate and limit total count
+
+  Step 3: Modify Main Function
+
+  Location: TimerFunction/__init__.py:37
+
+  Replace:
+  process_stock_data("MSFT")
+
+  With:
+  selected_stocks = select_stocks_for_processing()
+  for ticker in selected_stocks:
+      process_stock_data(ticker)
+
+  Step 4: Add Configuration Options
+
+  Environment Variables to add:
+  - SELECTION_MODE = "static" | "dynamic" | "hybrid"
+  - WATCHLIST_STOCKS = "MSFT,AAPL,GOOGL,NVDA"
+  - MAX_DAILY_STOCKS = "10"
+
+  Step 5: Error Handling Enhancements
+
+  Location: Within get_market_movers()
+  - API rate limit handling
+  - Fallback to static list if API fails
+  - Logging for selection decisions
+
+  Step 6: Optional Database Tracking
+
+  New table: stock_selections
+  CREATE TABLE stock_selections (
+      date DATE,
+      ticker VARCHAR(10),
+      selection_reason VARCHAR(50)
+  )
+
+  Track why each stock was selected daily.
+
+  Key Files to Modify:
+
+  1. TimerFunction/__init__.py - Main logic changes
+  2. TimerFunction/function.json - No changes needed
+  3. Environment variables in Azure portal
+
+  Testing Strategy:
+
+  1. Test with SELECTION_MODE=static first
+  2. Then try dynamic mode
+  3. Finally test hybrid approach
+  4. Monitor API rate limits (25 requests/day free tier)
+
+  This keeps your existing pipeline intact while adding flexibility.
+
+> claude
+
+⏺ I see you've started implementing the get_market_movers function! A few
+  quick fixes needed:
+
+  Issues to Address:
+
+  1. Variable Reference Error (lines 54, 57, 60, 65, 68)
+
+  You're referencing ticker but it's not defined in this function scope.
+  Should be:
+  logging.error(f"Timeout fetching market movers data")
+
+  2. JSON Parsing (line 72)
+
+  data is already a dict from response.json(), so remove:
+  gainers_losers_list = json.loads(data)  # ❌ Remove this
+  Just use data directly:
+  top_gainers = data["top_gainers"]
+
+  3. Return Value (line 74)
+
+  Add return statement and use the count parameter:
+  return tickers[:count]
+
+  4. Missing Data Check
+
+  Add after line 69:
+  elif "top_gainers" not in data:
+      logging.error("Unexpected API response structure for market movers")
+      return []
+
+  5. Next Steps
+
+  After fixing these, you can:
+  1. Call get_market_movers() in your main function
+  2. Loop through the returned tickers
+  3. Call process_stock_data() for each
+
+  The foundation looks good - just need these syntax fixes!
+
+> so based on your previous recommendations, not the ones from this
+  session, the get_market_movers function should only retrieve the ticker
+  list for the desired category of movers, and not write those (and the
+  accompanying data, which includes some unique but calculable data like
+  percent change) to the database?
+
+⏺ Correct! Based on the separation of concerns principle,
+  get_market_movers() should only return ticker symbols for stock
+  selection.
+
+  Recommended Architecture:
+
+  get_market_movers() Role:
+
+  - Fetch market movers metadata
+  - Extract ticker symbols only
+  - Return list of tickers for processing
+
+  process_stock_data() Role:
+
+  - Fetch detailed OHLCV data for each ticker
+  - Store standardized daily price data in your database
+
+  Why This Approach Makes Sense:
+
+  1. Data Consistency: Your stock_prices table has a standardized schema
+  for OHLCV data
+  2. Single Source: All historical data comes from TIME_SERIES_DAILY
+  endpoint
+  3. Separation: Selection logic separate from data processing
+  4. Flexibility: Can change selection criteria without affecting data
+  storage
+
+  Your Current Logic Issues:
+
+  Line 76: movers[category] should just be movers (you already extracted it
+   on line 72)
+
+  Line 82: Same issue - should be just movers
+
+  The market movers metadata (like change_percentage) is useful for
+  selection ranking but shouldn't duplicate your standardized price data
+  storage.
+
+  Your approach is architecturally sound - get_market_movers() for
+  selection, process_stock_data() for storage.
+
